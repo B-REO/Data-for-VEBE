@@ -1,0 +1,7 @@
+load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H2_ver7
+Normalize factor: 1.4915606873894895
+Roop times: 194
+True expectation: -1.045783144549801
+Number of terms in Hamiltonian: 15
+Total measurements (VQE): 217262.0
+Measurements per Pauli term (VQE, all): [0, 27158, 27158, 27158, 27158, 32840, 0, 0, 0, 32840, 0, 0, 21475, 0, 21475]

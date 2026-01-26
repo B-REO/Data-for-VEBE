@@ -1,4 +1,4 @@
-# A
+# Data for VEBE
 ## Introduction
 
 This repository contains all the data, scripts, and Jupyter notebooks used to generate the results presented in our paper  
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 
 ## data
 
-This directory contains the data used to generate Fig.3, Fig.4, Fig.5, and Fig.6.
+This directory contains the data used to generate **Fig.3-6**.
 
 It consists of four subdirectories, categorized by file type:
 
@@ -32,21 +32,28 @@ In both `npz` and `txt`, two subdirectories are used:
 
 ## notebook
 
-This directory contains the Jupyter notebooks used to reproduce Fig. 3, Fig. 4, Fig. 5, and Fig. 6 in the paper.
-
 This directory contains the Jupyter notebooks used to reproduce **Fig.3-6** in the paper.
 
 To reproduce these figures, please execute the corresponding notebooks.
-Before running, make sure the following dependencies are available in `vender` (via git clone).
+Before running, make sure the following dependencies are available in `vendor` (via git clone).
   
 ## scripts
 
 This directory contains Python scripts used to generate the data shown in **Fig.3–6** of the paper.
 
 These scripts automatically perform quantum simulations and save results into `data`.
-To use these scripts, please ensure the following repositories are cloned in `vender`.
 
-## vender
+### Execution
+
+You can start the simulation by running the following command in your terminal:
+
+```bash
+python3 simulation_for_vebe_by_casci.py
+```
+
+To use these scripts, please ensure the following repositories are cloned in `vendor`.
+
+## vendor
 
 This directory contains external repositories cloned via `git clone`, which are used as dependencies by the scripts and notebooks in this project.
 

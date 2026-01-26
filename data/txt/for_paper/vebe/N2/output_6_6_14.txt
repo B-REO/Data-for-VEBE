@@ -1,0 +1,10 @@
+load file: /home/users/dpw/c-vqe-be/pro_09/rhf_holder/N2_6_6_ex
+Roop times: 194
+Normalize factor: 16.05643491075516
+True energy: -4.825874453685698
+True probability: 0.0903345306979239
+Molecule: N2
+The number of Pauli rotation gates: 383
+The number of mesurements: 24838587.0
+Variable Value: 6_6
+Shift value: 103.92528583050652
