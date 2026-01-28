@@ -1,4 +1,7 @@
 # Data for VEBE
+
+[![DOI](https://zenodo.org/badge/1139541948.svg)](https://zenodo.org/badge/latestdoi/1139541948)
+
 ## Introduction
 
 This repository contains all the data, scripts, and Jupyter notebooks used to generate the results presented in our paper  
