@@ -1,6 +1,6 @@
 # Data for VEBE
 
-[![ORCID](https://img.shields.io/badge/ORCID-0009-0006-4020-099X-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0006-4020-099X)
+[![ORCID](https://img.shields.io/badge/ORCID-0009--0006--4020--099X-A6CE39?logo=orcid&logoColor=white)](https://orcid.org/0009-0006-4020-099X)
 [![DOI](https://zenodo.org/badge/1139541948.svg)](https://zenodo.org/badge/latestdoi/1139541948)
 
 ## Introduction
