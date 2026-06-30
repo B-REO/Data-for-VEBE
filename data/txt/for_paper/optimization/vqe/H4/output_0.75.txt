@@ -1,0 +1,8 @@
+Load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H4_ver8_1
+Optimization times: 2171
+Optimization result: -2.1450001235576357
+True energy: -2.1451106471862205
+Molecule: H4
+The number of Pauli rotation gates: 185
+Seed number: 100
+Variable Value: 0.75

@@ -1,0 +1,8 @@
+Load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H2_ver7
+Optimization times: 35
+Optimization result: -1.0903421764221748
+True energy: -1.0903421765127608
+Molecule: H2
+The number of Pauli rotation gates: 15
+Seed number: 10.0
+Variable Value: 1.05

@@ -1,0 +1,12 @@
+Load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H2_ver7
+Optimization times: 75
+Optimization result: -0.9771296158878753
+Max Absolute Eigenvalue: 0.6602582607226481
+Normalization factor: 1.3417573447557074
+True energy: -0.9771296161660897
+Molecule: H2
+The number of Pauli rotation gates: 15
+Seed number: 66.0
+Variable Value: 1.65
+Shift was done.
+Shift value: 0.31687135544344164

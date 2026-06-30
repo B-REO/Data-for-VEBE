@@ -5,7 +5,9 @@ used in quantum chemistry and quantum computing experiments.
 Functions included:
 - find_rhf_files_with_metadata: Extracts metadata from RHF input files with CASCI configuration.
 - find_rhf_files_with_metadata_for_fci: Targets RHF files specifically derived from FCI calculations.
+- get_folder_paths_and_values: Load paths to folders containing `.npz` files and the numeric values extracted from the folder name.  
 - get_statenpz_paths_and_values: Loads `.npz` state files indexed by floating-point geometry values.
+- get_txt_paths_and_values: Loads `.txt` files and associated numeric values from filenames.
 - load_state_on_main: Embeds a reduced quantum state into a larger Hilbert space for simulation.
 
 Use cases:
@@ -167,6 +169,69 @@ def find_rhf_files_with_metadata_for_fci(folder_path):
     matched_files.sort(key=lambda x: x[2])  
     return matched_files
 
+def get_folder_paths_and_values(folder_path):
+    """
+    Recursively search for folders whose names represent numeric values.
+
+    The function traverses the directory tree rooted at folder_path
+    and extracts floating-point values from folder names such as
+    0, 0.0, or 91.0.
+
+    Parameters:
+    ----------
+    folder_path : str
+    Root directory to search recursively.
+
+    Returns:
+    -------
+    sorted_paths : list[str]
+        Full paths to the matched folders, sorted by the extracted value.
+
+    sorted_values : list[float]
+        Floating-point values extracted from the folder names.
+
+    Notes:
+    -----
+    - Only folder names consisting entirely of a numeric value are matched.
+    - Folders that do not match the expected format are skipped.
+    - Useful for loading simulation results indexed by seed numbers,
+      bond lengths, or other numerical parameters.
+    """
+
+    paths = []
+    values = []
+
+    # Match folder names that represent numeric values.
+    pattern = re.compile(r'^([0-9]+(?:\.[0-9]+)?)$')
+
+    for root, dirs, files in os.walk(folder_path):
+
+        for d in dirs:
+
+            match = pattern.match(d)
+
+            if match:
+
+                float_value = float(match.group(1))
+
+                full_path = os.path.join(root, d)
+
+                paths.append(full_path)
+                values.append(float_value)
+
+            else:
+                print(f"Skipped: {d}")
+
+    # Sort by the extracted numeric value.
+    sorted_pairs = sorted(zip(paths, values), key=lambda x: x[1])
+
+    if sorted_pairs:
+        sorted_paths, sorted_values = zip(*sorted_pairs)
+    else:
+        sorted_paths, sorted_values = [], []
+
+    return list(sorted_paths), list(sorted_values)
+
 def get_statenpz_paths_and_values(folder_path):
     """
     Recursively searches for `.npz` files in the specified folder and extracts numeric values from filenames.
@@ -193,6 +258,45 @@ def get_statenpz_paths_and_values(folder_path):
     for root, dirs, files in os.walk(folder_path):
         for file in files:
             if file.lower().endswith('.npz'):
+                match = pattern.search(file)
+                if match:
+                    float_value = float(match.group(1))
+                    full_path = os.path.join(root, file)
+                    paths.append(full_path)
+                    values.append(float_value)
+                else:
+                    print(f"Skipped: does not match expected format: {file}")                                                                                                           
+    sorted_pairs = sorted(zip(paths, values), key=lambda x: x[1])
+    sorted_paths, sorted_values = zip(*sorted_pairs) if sorted_pairs else ([], [])
+
+    return list(sorted_paths), list(sorted_values)
+
+def get_txt_paths_and_values(folder_path):
+    """
+    Recursively searches for `.txt` files in the specified folder and extracts numeric values from filenames.
+
+    The function looks for filenames that end with a number (including decimal) immediately before the `.txt` extension.
+    For example: `output_1.50_0.txt` → float value = 0
+
+    Returns:
+        sorted_paths (List[str]): List of full paths to matched `.txt` files, sorted by the numeric value.
+        sorted_values (List[float]): List of extracted numeric values corresponding to the filenames.
+
+    Args:
+        folder_path (str): Root folder to search for `.txt` files.
+
+    Notes:
+        - Files that do not match the expected format will be skipped with a printed warning.
+        - Useful for loading data indexed by geometry or other float-valued parameters.
+    """
+    paths = []
+    values = []
+
+    pattern = re.compile(r'_([0-9]+(?:\.[0-9]+)?)\.txt', re.IGNORECASE)
+
+    for root, dirs, files in os.walk(folder_path):
+        for file in files:
+            if file.lower().endswith('.txt'):
                 match = pattern.search(file)
                 if match:
                     float_value = float(match.group(1))

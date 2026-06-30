@@ -1,0 +1,14 @@
+Load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H4_ver8_3
+Optimization times: 143
+Optimization result: -1.8027698606302454
+Max Absolute Eigenvalue: 1.4195137094048382
+Normalization factor: 5.253382156235064
+True energy: -1.8712711363570647
+Molecule: H4
+The number of Pauli rotation gates: 185
+Seed number: 100
+Variable Value: 2.55
+Shift was done.
+Shift value: 0.4517574269522263
+Delta: 0.03425044567336421
+Coefficient of Identity Matrix: -0.6342614323685162
