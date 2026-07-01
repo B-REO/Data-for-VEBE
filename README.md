@@ -19,15 +19,15 @@ pip install -r requirements.txt
 ```
 
 ## Repository Structure
-project/
-├── data/
-├── notebooks/
-├── scripts/
-├── module/
-├── vendor/
-├── README.md
-├── CHANGELOG.md
-└── requirements.txt
+project/\\
+├── data/\\
+├── notebooks/\\
+├── scripts/\\
+├── module/\\
+├── vendor/\\
+├── README.md\\
+├── CHANGELOG.md\\
+└── requirements.txt\\
 
 ## data
 
