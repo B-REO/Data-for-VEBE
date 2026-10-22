@@ -3,8 +3,8 @@ message: "If you use this software or data, please cite both the article and thi
 title: "Data for VEBE"
 type: dataset
 version: "2.0.0"
-date-released: 2026-10-20
-doi: 10.5281/zenodo.18334138
+date-released: "2026-10-21"
+doi: "10.5281/zenodo.18334138"
 repository-code: "https://github.com/B-REO/Data-for-VEBE"
 license:
   - MIT
