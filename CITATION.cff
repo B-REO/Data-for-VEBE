@@ -13,7 +13,7 @@ authors:
   - family-names: Kurashige
     given-names: Yuki
     affiliation: "Department of Chemistry, Graduate School of Science, Kyoto University"
-version: "2.0.2"
+version: "2.0.3"
 date-released: 2026-10-22
 doi: "10.5281/zenodo.18334138"
 repository-code: "https://github.com/B-REO/Data-for-VEBE"
