@@ -1,0 +1,10 @@
+load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H6_ver7
+Roop times: 194
+Normalize factor: 18.38989773641956
+True energy: -7.222608705339844
+True probability: 0.15425155315036754
+Molecule: H6
+The number of Pauli rotation gates: 919
+The number of mesurements: 32552233.0
+Variable Value: 2.25
+Shift value: -4.4020943364099185

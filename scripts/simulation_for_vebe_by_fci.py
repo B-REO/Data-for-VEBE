@@ -3,10 +3,11 @@ This script performs VEBE processing and estimates energy values
 for Full-CI Hamiltonians transformed via Jordan-Wigner mapping.
 
 This script was used to generate the raw data 
-for Fig.3 presented in our manuscript.
+for Fig. 3 and 9 presented in our manuscript.
 The default parameters and simulation settings 
 in this script correspond to the conditions described 
-at the beginning of Section 3 and in Section 3.1 of the paper.
+at the beginning of Section 3, in Section 3.A, 
+and in Appendix C of the paper.
 
 Output:
 - Compressed `.npz` files containing:
@@ -16,7 +17,7 @@ Output:
     * array4: estimated probability list (per set)
 
   These are saved to:
-    data/npz/worked/vebe/fci/{molecule}/{timestamp}/npz_{molecule}_{distance}.npz
+    data/npz/worked/vebe/fci/{shift_type}/{molecule}/{timestamp}/npz_{molecule}_{distance}.npz
 
 - Log `.txt` files recording for each variable value:
     * RHF input file name
@@ -28,18 +29,12 @@ Output:
     * number of Pauli term
     * number of measurements
     * variable value
-    * correction value (If it is not 0.)
+    * shift type
+    * shift value 
+    * delta value
 
   These are saved to:
-    data/txt/worked/vebe/fci/{molecule}/{timestamp}/output_{variable}_{index}.txt
-
-Note:
-During execution, the program may occasionally terminate due to a temporary
-failure in reading the `.rhf` file.
-This issue is not caused by corruption of the `.rhf` file itself, but is
-attributed to environment-dependent I/O behavior.
-
-If this occurs, simply rerun the program; no modification of the input files is required.
+    data/txt/worked/vebe/fci/{shift_type}/{molecule}/{timestamp}/output_{variable}_{index}.txt
 """
 
 import math
@@ -52,6 +47,7 @@ from openfermion.linalg import get_sparse_operator
 from pathlib import Path
 from qulacs import QuantumState, QuantumCircuit
 from qulacs.gate import DenseMatrix
+from qulacs.observable import create_observable_from_openfermion_text
 from scipy.sparse.linalg import eigsh
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -101,39 +97,77 @@ for i in range(len(rhf_list)):
     eval_max, evec_max = eigsh(ham, k=1, which='LA')
     eig_max = float(eval_max[0])
 
-    # === Step 2.4: Perform eq.(23) ~ (27) in the paper ===
+    # === Step 2.4: Choose shift type ===
+    shift_type = "exact"
+    # Choose "exact" or "approximate".
+
+    if shift_type not in {"exact", "approximate"}:
+        raise ValueError(
+            f"Unknown shift type: {shift_type!r}. "
+            "Choose 'exact' or 'approximate'."
+        )
+
+    # === Step 2.5: Perform eq.(37) ~ (41) in the paper ===
     re_num, re_ope = pitbe.read_general(str(jw_hamiltonian))
     corrector = 0
+    re_num_arr = np.asarray(re_num, dtype=np.complex128).ravel()
 
-    # eq.(23)
-    if (eig_min + eig_max - 2*re_num[0].real) > 0:
-        corrector = (eig_min + eig_max)/2
-    re_num[0] -= corrector
+    # transform from complex to float
+    if np.max(np.abs(re_num_arr.imag)) > 1e-12:
+        raise ValueError(f"re_num has non-negligible imaginary parts: max |Im|={np.max(np.abs(re_num_arr.imag))}")
+    re_num_arr = re_num_arr.real.astype(float)
     
-    # eq.(24)
-    s_dush = np.sum(np.abs(re_num)) # |x| + B
+    # eq.(37)
+    # Determine the shift used to define the VEBE measurement budget.
+    if shift_type == "exact":
+        corrector = (eig_min + eig_max)/2 
+    else:
+        # HF energy
+        sub_main = pitbe.total_search(re_ope)
+        state_test = QuantumState(sub_main)
+        state_test.set_zero_state()
+        hf_state = np.zeros(2**sub_main)
+        # Please change the value of electron (ex. "H4":4, "H6":6) when you simulate other molecule.
+        electron = 2
+        hf_state[2**electron-1] = 1
+        state_test.load(hf_state)
+        qulacs_hamiltonian = create_observable_from_openfermion_text(str(jw_hamiltonian))
+        eig_min_2 = qulacs_hamiltonian.get_expectation_value(state_test)
+        # Upper bound of the maximum eigenvalue
+        eig_max_2 = re_num_arr[0] + np.sum(np.abs(re_num_arr[1:]))
+        corrector = (eig_min_2 + eig_max_2)/2
     
-    # eq.(25)
-    total_shots = np.ceil(s_dush**2/1.6/1.6*10**6/4) # S^2/4/\epsilon
+    # Shifted coefficient norm used to determine the VEBE measurement budget
+    shifted_coeffs = re_num_arr.copy()
+    shifted_coeffs[0] -= corrector
+
+    # eq.(38)
+    s_dush = np.sum(np.abs(shifted_coeffs))
+
+    # eq.(39)
+    total_shots = np.ceil(s_dush**2/1.6/1.6*10**6/4) 
     
-    # eq.(27)
-    delta = total_shots**0.5*(1.6)/10**5/(s_dush - np.abs(eig_min/2 - eig_max/2))*np.sqrt(s_dush**2 - np.abs(eig_min/2 - eig_max/2)**2)
-    
-    re_num[0] -= np.abs(delta)
-    # eq.(26)
+    # eq.(41)
+    if shift_type == "exact":
+        delta = total_shots**0.5*(1.6)/10**5/(s_dush - np.abs(eig_min/2 - eig_max/2))*np.sqrt(s_dush**2 - np.abs(eig_min/2 - eig_max/2)**2) 
+    else:
+        delta = total_shots**0.5*(1.6)/10**5/(s_dush - np.abs(eig_min_2/2 - eig_max_2/2))*np.sqrt(s_dush**2 - np.abs(eig_min_2/2 - eig_max_2/2)**2)
+    shifted_coeffs[0] -= np.abs(delta)
+
+    # eq.(40)
     corrector += np.abs(delta)
     
-    jw_norm = np.sum(np.abs(re_num))
+    jw_norm = np.sum(np.abs(shifted_coeffs))
 
-    # === Step 2.5: Construct quantum state and gates B, C as defined in Fig. 1 of the paper ===
+    # === Step 2.6: Construct quantum state and gates B, C as defined in Fig. 1 of the paper ===
     # calculate $\sqrt{\alpha_i/S}$
-    alphas = (np.sqrt(np.abs(re_num)) / np.sqrt(np.sum(np.abs(re_num))))
+    alphas = (np.sqrt(np.abs(shifted_coeffs)) / np.sqrt(np.sum(np.abs(shifted_coeffs))))
     if math.floor(np.log2(len(alphas))) != np.log2(len(alphas)):
         zero_list = np.zeros(2**(math.floor(np.log2(len(alphas))) + 1) - len(alphas))
         alphas = np.append(alphas, zero_list)
     opposite_list = np.ones(len(alphas))
-    for j in range(len(re_num)):
-        if (re_num[j].real < 0):
+    for j in range(len(shifted_coeffs)):
+        if (shifted_coeffs[j].real < 0):
             opposite_list[j] = -1
     cf = pitbe.coeff_make(alphas)
     mat_res = pitbe.mat_maker(alphas, cf)
@@ -156,25 +190,25 @@ for i in range(len(rhf_list)):
     opp_gate = DenseMatrix([j for j in range(anci)], np.diag(opposite_list))
     gate_dag = gate.get_inverse()
 
-    # === Step 2.6: Prepare the quantum state and perform eq.(10) ~ (12), (14) in the paper ===
+    # === Step 2.7: Prepare the quantum state and perform eq.(11), (12), (14), and (15) in the paper ===
     # prepare the quantum circuit for VEBE 
     circ = QuantumCircuit(n)
 
-    # quantum gate 'B' for eq.(10)
+    # quantum gate 'B' for eq.(11)
     circ.add_gate(gate)
     circ.add_gate(opp_gate)
 
-    # quantum gates for eq.(11)
+    # quantum gates for eq.(12)
     for j in range(len(cont_list)):    
         pitbe.circ_make(re_ope[j], cont_list[j], circ, main + anci, anci)
 
-    # quantum gate 'C' for eq.(12)
+    # quantum gate 'C' for eq.(14)
     circ.add_gate(gate_dag)
 
     # apply the quantum circuit to transform the quantum state
     circ.update_quantum_state(state)
 
-    # perform eq.(14)
+    # perform eq.(15)
     obser_order = []
     for j in range(anci):
         obser_order.append(0)
@@ -182,27 +216,28 @@ for i in range(len(rhf_list)):
         obser_order.append(2)
     prob = state.get_marginal_probability(obser_order)
 
-    # === Step 2.7: Measure quantum state and calculate eq.(13) and eq.(15) ===
+    # === Step 2.8: Measure quantum state and calculate eq.(15) and eq.(17) ===
     loop_time = 194
     energy_list = []
     prob_list = []
     
-    # measure quantum state and perform eq.(13)
+    # measure quantum state and perform eq.(15)
     probs = batched_sampling_est_prob(state, anci, total_shots, loop_time, max_batch_shots=2000000)
     prob_list = probs.tolist()
 
-    # calculate energy estimator (Eq. 15)
+    # calculate energy estimator (eq.(17))
     energy_list = (-np.sqrt(probs) * jw_norm).tolist()
 
-    # === Step 2.8: Save results as NPZ file and TXT file ===
+    # === Step 2.9: Save results as NPZ file and TXT file ===
     # NPZ files
     result_dir = os.path.join(os.path.dirname(__file__), 
                               "..", "data", 
                               "npz", "worked", 
-                              "vebe", "fci", 
+                              "vebe", "fci",
+                              shift_type, 
                               str(rhf_list[i][1]), time)
-    os.makedirs(result_dir, exist_ok=True)  # ディレクトリが存在しない場合は作成
-    f_name = "npz_" + str(rhf_list[i][1]) + "_" + str(rhf_list[i][2]) + ".npz" # intをstrに変換
+    os.makedirs(result_dir, exist_ok=True)  
+    f_name = "npz_" + str(rhf_list[i][1]) + "_" + str(rhf_list[i][2]) + ".npz" 
     file_n = os.path.join(result_dir, f_name)
     np.savez_compressed(file_n, array1=energy_list, 
                         array2=corrector, array3=prob,
@@ -213,23 +248,25 @@ for i in range(len(rhf_list)):
                            "..", "data", 
                            "txt", "worked", 
                            "vebe", "fci",
-                           str(rhf_list[i][1]), time)
+                           shift_type,
+                           str(rhf_list[i][1]),time)
     os.makedirs(txt_dir, exist_ok=True)  
     txt_file = os.path.expanduser(txt_dir + "/output_" + str(rhf_list[i][2]) + "_" + str(i)  + ".txt")
     output_directory = os.path.dirname(txt_file)
     os.makedirs(output_directory, exist_ok=True)
     with open(txt_file, "w") as file:
         file.write("Load file: " + str(rhf_dir) + "\n")
-        file.write("Roop times: " + str(loop_time) + "\n")
-        file.write("Normalize factor: " + str(jw_norm) + "\n")
+        file.write("Loop times: " + str(loop_time) + "\n")
+        file.write("Normalization factor: " + str(jw_norm) + "\n")
         file.write("True energy: " + str(-np.sqrt(prob)*jw_norm) + "\n")
         file.write("True probability: " + str(prob) + "\n")
         file.write("Molecule: " + str(rhf_list[i][1]) + "\n")
         file.write("The number of Pauli rotation gates: " + str(len(re_ope)) + "\n")
-        file.write("The number of mesurements: " + str(total_shots) + "\n")
+        file.write("The number of measurements: " + str(total_shots) + "\n")
         file.write("Variable Value: " + str(rhf_list[i][2]) + "\n")
-        if corrector != 0:
-            file.write("Shift value: " + str(-corrector) + "\n")
+        file.write("Shift type: " + shift_type + "\n")
+        file.write("Shift value: " + str(-corrector) + "\n")
+        file.write("Delta: " + str(delta) + "\n")
 
     print(f"{txt_file} has been created.")
 

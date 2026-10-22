@@ -1,29 +1,54 @@
 """
-This module provides utility functions for locating and processing simulation input/output files
-used in quantum chemistry and quantum computing experiments.
+Utility functions for loading and organizing simulation data.
 
-Functions included:
-- find_rhf_files_with_metadata: Extracts metadata from RHF input files with CASCI configuration.
-- find_rhf_files_with_metadata_for_fci: Targets RHF files specifically derived from FCI calculations.
-- get_folder_paths_and_values: Load paths to folders containing `.npz` files and the numeric values extracted from the folder name.  
-- get_statenpz_paths_and_values: Loads `.npz` state files indexed by floating-point geometry values.
-- get_txt_paths_and_values: Loads `.txt` files and associated numeric values from filenames.
-- load_state_on_main: Embeds a reduced quantum state into a larger Hilbert space for simulation.
+This module provides helper functions for locating RHF input files,
+loading simulation results, extracting metadata from file and directory
+names, constructing qubit Hamiltonians, and preparing quantum states for
+VEBE and VQE simulations.
 
-Use cases:
-- Batch preparation and organization of input `.rhf` files used in quantum simulations.
-- Loading precomputed quantum states for main-register qubits with ancillary padding.
-- Pre-sorting datasets by geometric parameters for systematic benchmarking.
+The functions are primarily used by the analysis and optimization
+notebooks associated with this repository. File and directory names are
+assumed to follow the naming conventions used by the simulation scripts.
 
-Requirements:
-- Python 3.7+
-- numpy
-- os, re (standard library)
+Functions
+---------
+find_rhf_files_with_metadata
+    Locate CASCI-based RHF files and extract molecular metadata.
 
-Note:
-- This script assumes a specific file naming convention for `.rhf` and `.npz` files.
-- File paths are expected to be recursively searched from a provided root directory.
-- These utilities are typically used as part of a larger simulation workflow.
+find_rhf_files_with_metadata_for_fci
+    Locate FCI-based RHF files and extract molecular metadata.
+
+get_folder_paths_and_values
+    Locate numerically named directories and return their numeric values.
+
+get_statenpz_paths_and_values
+    Locate NPZ files and extract numerical parameters from their filenames.
+
+get_txt_paths_and_values
+    Locate TXT files and extract numerical parameters from their filenames.
+
+load_state_on_main
+    Embed a state vector into the main register of a larger quantum state.
+
+load_target_and_shift
+    Load the target energy and Hamiltonian shift for an optimization run.
+
+load_trajectories
+    Load optimization trajectories from multiple random-seed runs.
+
+qubit_hamiltonian
+    Construct a Jordan-Wigner-transformed qubit Hamiltonian from an RHF file.
+
+read_value
+    Read a numerical value associated with a specified key from a TXT file.
+
+seed_folders
+    Locate random-seed directories used for repeated optimization runs.
+
+Notes
+-----
+These utilities assume the directory structure and naming conventions
+used by the simulation scripts in this repository.
 """
 
 import numpy as np
@@ -32,40 +57,33 @@ import re
 
 def find_rhf_files_with_metadata(folder_path):
     """
-    Recursively searches the specified folder for `.rhf` files that match a specific naming pattern,
-    extracts metadata (system name, configuration string, and floating-point variable), 
-    and returns a sorted list of tuples containing:
-      - Full file path
-      - System name (e.g., "N2")
-      - Number of active spaces and electrons (e.g., "6_6")
-      - Floating-point value (e.g., 1.0 from "1_0")
+    Locate CASCI-based RHF files and extract metadata from their filenames.
 
-    Expected filename pattern: 
-        casci_<System>_..._<Config>_<IntPart>_<DecimalPart>.rhf
-    Example:
-        casci_N2_active_6_6_1_0.rhf  → ("N2", "6_6", 1.0)
+    The directory tree rooted at ``folder_path`` is searched recursively.
+    Files are expected to follow the naming convention
 
-    Parameters:
+    ``casci_<system>_..._<config>_<integer>_<decimal>.rhf``,
+
+    where ``<config>`` represents the active-space specification and the
+    final two integer fields define a floating-point parameter such as
+    the bond length.
+
+    Parameters
     ----------
-    folder_path : str
-        Root directory to start the recursive search.
+    folder_path : str or pathlib.Path
+        Root directory to search recursively.
 
-    Returns:
+    Returns
     -------
-    matched_files : list of tuples
-        List of (filepath, system_name, config_string, float_value) sorted by float_value.
+    list of tuple
+        Tuples of the form
+        ``(file_path, system_name, config_string, value)``, sorted in
+        ascending order of ``value``.
 
-    Notes:
+    Notes
     -----
-    - Skips files not matching the expected pattern.
-    - Prints warnings if the folder does not exist or if any file is skipped due to mismatch.
-    - Intended for locating RHF files with embedded metadata for simulation input.
-
-    Usage Example:
-    --------------
-    files = find_rhf_files_with_metadata("data/rhf/")
-    for f in files:
-        print(f)
+    Files that do not match the expected naming convention are skipped.
+    If ``folder_path`` does not exist, an empty list is returned.
     """
     matched_files = []
 
@@ -92,59 +110,39 @@ def find_rhf_files_with_metadata(folder_path):
                         (full_path, system_name, config_string, float_value)
                     )
                 else:
-                    print(f"スキップ（形式不一致）: {file}")
+                    print(f"Skipped (does not match expected format): {file}")
 
     matched_files.sort(key=lambda x: x[3])  
     return matched_files
 
 def find_rhf_files_with_metadata_for_fci(folder_path):
     """
-    Recursively searches the specified folder for `.rhf` files generated from
-    FCI calculations and extracts metadata embedded in the filename.
+    Locate FCI-based RHF files and extract metadata from their filenames.
 
-    This function is intended for locating RHF files corresponding to
-    FCI-based reference calculations, where the molecular system name and
-    a floating-point variable (e.g., bond length) are encoded in the filename.
+    The directory tree rooted at ``folder_path`` is searched recursively.
+    Files are expected to follow the naming convention
 
-    Expected filename pattern:
-        fcidump_fci_<System>_..._<IntPart>_<DecimalPart>.rhf
+    ``fcidump_fci_<system>_..._<integer>_<decimal>.rhf``.
 
-    Example:
-        fcidump_fci_H2_ccpvdz_1_0.rhf
-        → system_name = "H2", float_value = 1.0
+    The final two integer fields are interpreted as the integer and
+    fractional parts of a floating-point parameter such as the bond
+    length.
 
-    Parameters:
+    Parameters
     ----------
-    folder_path : str
-        Root directory from which the recursive search for `.rhf` files starts.
+    folder_path : str or pathlib.Path
+        Root directory to search recursively.
 
-    Returns:
+    Returns
     -------
-    matched_files : list of tuples
-        A list of tuples of the form:
-            (full_path, system_name, float_value)
+    list of tuple
+        Tuples of the form ``(file_path, system_name, value)``, sorted
+        in ascending order of ``value``.
 
-        where:
-        - full_path (str): absolute path to the `.rhf` file
-        - system_name (str): molecular or system identifier extracted from filename
-        - float_value (float): numerical parameter reconstructed from filename
-
-        The list is sorted in ascending order of `float_value`.
-
-    Notes:
+    Notes
     -----
-    - If the specified folder does not exist, a warning message is printed and
-      an empty list is returned.
-    - Only files with the `.rhf` extension and matching the expected naming
-      pattern are included.
-    - This function is primarily used to organize and load FCI reference data
-      for comparison with variational or block-encoding-based simulations.
-
-    Usage Example:
-    --------------
-    files = find_rhf_files_with_metadata_for_fci("data/rhf/fci/")
-    for path, system, value in files:
-        print(system, value)
+    Files that do not match the expected naming convention are ignored.
+    If ``folder_path`` does not exist, an empty list is returned.
     """
     matched_files = []
 
@@ -171,31 +169,29 @@ def find_rhf_files_with_metadata_for_fci(folder_path):
 
 def get_folder_paths_and_values(folder_path):
     """
-    Recursively search for folders whose names represent numeric values.
+    Locate numerically named directories and extract their values.
 
-    The function traverses the directory tree rooted at folder_path
-    and extracts floating-point values from folder names such as
-    0, 0.0, or 91.0.
+    The directory tree rooted at ``folder_path`` is searched recursively.
+    A directory is selected when its name consists entirely of a
+    non-negative integer or floating-point number.
 
-    Parameters:
+    Parameters
     ----------
-    folder_path : str
-    Root directory to search recursively.
+    folder_path : str or pathlib.Path
+        Root directory to search recursively.
 
-    Returns:
+    Returns
     -------
-    sorted_paths : list[str]
-        Full paths to the matched folders, sorted by the extracted value.
+    sorted_paths : list of str
+        Paths to the matched directories, sorted by their numeric values.
+    sorted_values : list of float
+        Numeric values extracted from the corresponding directory names.
 
-    sorted_values : list[float]
-        Floating-point values extracted from the folder names.
-
-    Notes:
+    Notes
     -----
-    - Only folder names consisting entirely of a numeric value are matched.
-    - Folders that do not match the expected format are skipped.
-    - Useful for loading simulation results indexed by seed numbers,
-      bond lengths, or other numerical parameters.
+    Directories whose names do not represent numeric values are skipped.
+    This function is used, for example, to locate directories associated
+    with different random seeds.
     """
 
     paths = []
@@ -234,21 +230,30 @@ def get_folder_paths_and_values(folder_path):
 
 def get_statenpz_paths_and_values(folder_path):
     """
-    Recursively searches for `.npz` files in the specified folder and extracts numeric values from filenames.
+    Locate NPZ files and extract numerical values from their filenames.
 
-    The function looks for filenames that end with a number (including decimal) immediately before the `.npz` extension.
-    For example: `npz_N2_1.50.npz` → float value = 1.50
+    The directory tree rooted at ``folder_path`` is searched recursively.
+    The function extracts the numerical field immediately preceding the
+    ``.npz`` extension.
 
-    Returns:
-        sorted_paths (List[str]): List of full paths to matched `.npz` files, sorted by the numeric value.
-        sorted_values (List[float]): List of extracted numeric values corresponding to the filenames.
+    For example, ``result_1.50.npz`` is associated with the value ``1.50``.
 
-    Args:
-        folder_path (str): Root folder to search for `.npz` files.
+    Parameters
+    ----------
+    folder_path : str or pathlib.Path
+        Root directory to search recursively.
 
-    Notes:
-        - Files that do not match the expected format will be skipped with a printed warning.
-        - Useful for loading data indexed by geometry or other float-valued parameters.
+    Returns
+    -------
+    sorted_paths : list of str
+        Paths to the matched NPZ files, sorted by their extracted values.
+    sorted_values : list of float
+        Numeric values extracted from the corresponding filenames.
+
+    Notes
+    -----
+    NPZ files that do not match the expected naming convention are
+    skipped.
     """
     paths = []
     values = []
@@ -265,7 +270,7 @@ def get_statenpz_paths_and_values(folder_path):
                     paths.append(full_path)
                     values.append(float_value)
                 else:
-                    print(f"Skipped: does not match expected format: {file}")                                                                                                           
+                    print(f"Skipped (does not match expected format): {file}")                                                                                                           
     sorted_pairs = sorted(zip(paths, values), key=lambda x: x[1])
     sorted_paths, sorted_values = zip(*sorted_pairs) if sorted_pairs else ([], [])
 
@@ -273,21 +278,30 @@ def get_statenpz_paths_and_values(folder_path):
 
 def get_txt_paths_and_values(folder_path):
     """
-    Recursively searches for `.txt` files in the specified folder and extracts numeric values from filenames.
+    Locate TXT files and extract numerical values from their filenames.
 
-    The function looks for filenames that end with a number (including decimal) immediately before the `.txt` extension.
-    For example: `output_1.50_0.txt` → float value = 0
+    The directory tree rooted at ``folder_path`` is searched recursively.
+    The function extracts the numerical field immediately preceding the
+    ``.txt`` extension.
 
-    Returns:
-        sorted_paths (List[str]): List of full paths to matched `.txt` files, sorted by the numeric value.
-        sorted_values (List[float]): List of extracted numeric values corresponding to the filenames.
+    For example, ``output_1.50_0.txt`` is associated with the value ``0``.
 
-    Args:
-        folder_path (str): Root folder to search for `.txt` files.
+    Parameters
+    ----------
+    folder_path : str or pathlib.Path
+        Root directory to search recursively.
 
-    Notes:
-        - Files that do not match the expected format will be skipped with a printed warning.
-        - Useful for loading data indexed by geometry or other float-valued parameters.
+    Returns
+    -------
+    sorted_paths : list of str
+        Paths to the matched TXT files, sorted by their extracted values.
+    sorted_values : list of float
+        Numeric values extracted from the corresponding filenames.
+
+    Notes
+    -----
+    TXT files that do not match the expected naming convention are
+    skipped.
     """
     paths = []
     values = []
@@ -312,39 +326,275 @@ def get_txt_paths_and_values(folder_path):
 
 def load_state_on_main(target_data, anc, main, qu_state):
     """
-    Load a quantum state onto the main register of a quantum system.
+    Embed a state vector into the main register of a larger quantum state.
 
-    This function prepares a quantum state vector for loading into a quantum simulator,
-    assuming a system composed of ancillary (anc) and main (mai) qubits. The input
-    state `target_data` is assumed to correspond to the amplitudes of the main qubits only,
-    and this function embeds it into the full Hilbert space by placing the amplitudes
-    in the subspace where all ancilla qubits are initialized to |0⟩.
+    ``target_data`` is interpreted as a state of ``main`` qubits. The
+    state is embedded into a register containing ``anc + main`` qubits
+    while the ancillary register is initialized to the all-zero state.
 
-    Parameters:
-        target_data (np.ndarray): A 1D complex-valued numpy array of length 2**mai
-            representing the quantum state to be loaded onto the main register.
-        anc (int): Number of ancilla qubits. The final state will be embedded into
-            a register of size (anc + mai), where ancilla qubits are set to |0⟩.
-        main (int): Number of main qubits. Must satisfy len(target_data) == 2**main.
-        qu_state (QuantumState): A quantum state object (e.g., from Qulacs) that will
-            be overwritten with the new state vector. Its dimension must be 2**(anc + mai).
+    With the qubit ordering used in this repository, the amplitude
+    ``target_data[i]`` is placed at index ``2**anc * i`` of the full
+    state vector.
 
-    Behavior:
-        - Creates a zero-initialized state vector of length 2**(anc + mai)
-        - Places each amplitude of `target_data[i]` into the basis state where
-          ancilla qubits are all zero: position 2**anc * i
-        - Loads the constructed state into `qu_state`
+    Parameters
+    ----------
+    target_data : array_like
+        State-vector amplitudes for the main register. Its length must be
+        ``2**main``.
+    anc : int
+        Number of ancillary qubits.
+    main : int
+        Number of main-register qubits.
+    qu_state
+        Quantum-state object whose state vector is overwritten by the
+        embedded state.
 
-    Example:
-        If anc = 2 and mai = 1, this will place target_data[0] at index 0,
-        and target_data[1] at index 4 (binary: 100), corresponding to:
-            |00⟩|0⟩ and |00⟩|1⟩ → embedded in |000⟩ and |100⟩
+    Returns
+    -------
+    None
+        The supplied ``qu_state`` is modified in place.
 
-    Note:
-        This assumes the ancilla qubits are in the zero state and not entangled
-        with the main qubits initially.
+    Notes
+    -----
+    The ancillary qubits are assumed to be initialized in the all-zero
+    state.
     """
     reserve_for_load = np.zeros(2**(anc+main), dtype=complex)
     for i in range(2**main):
         reserve_for_load[2**anc*i] = target_data[i]
     qu_state.load(reserve_for_load)
+
+def load_target_and_shift(root, index, seed):
+    """
+    Load the target energy and Hamiltonian shift for one geometry.
+
+    If numerically named seed directories are present under ``root``,
+    the directory corresponding to ``seed`` is selected. Otherwise,
+    ``root`` itself is treated as a single optimization run.
+
+    Parameters
+    ----------
+    root : str or pathlib.Path
+        Root directory containing optimization results.
+    index : int
+        Index of the molecular geometry in the sorted list of TXT files.
+    seed : int or float
+        Random seed identifying the optimization run.
+
+    Returns
+    -------
+    target : float
+        Target energy stored under ``"True energy"``.
+    shift : float
+        Hamiltonian shift stored under ``"Shift value"``.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the requested seed directory or TXT result files cannot be
+        found.
+    KeyError
+        If ``"True energy"`` or ``"Shift value"`` is absent from the
+        selected TXT file.
+    """
+    folders, seeds = seed_folders(root)
+
+    if seeds[0] is not None:
+        matched = [
+            f for f, s in zip(folders, seeds)
+            if np.isclose(s, seed)
+        ]
+
+        if not matched:
+            raise FileNotFoundError(
+                f"No folder for seed {seed} in {root}"
+            )
+
+        folders = matched
+
+    txt_files, _ = get_txt_paths_and_values(folders[0])
+
+    if len(txt_files) == 0:
+        raise FileNotFoundError(
+            f"No txt files found in {folders[0]}"
+        )
+
+    txt = txt_files[index]
+
+    return (
+        read_value(txt, "True energy"),
+        read_value(txt, "Shift value"),
+    )
+
+def load_trajectories(root, index):
+    """
+    Load optimization trajectories for one molecular geometry.
+
+    Optimization histories are collected from all seed directories under
+    ``root``. If the trajectories contain different numbers of iterations,
+    shorter trajectories are padded with ``NaN`` values.
+
+    Parameters
+    ----------
+    root : str or pathlib.Path
+        Root directory containing optimization results.
+    index : int
+        Index of the molecular geometry in the sorted list of NPZ files.
+
+    Returns
+    -------
+    trajectories : numpy.ndarray
+        Array with shape ``(n_seeds, max_iterations)`` containing the
+        optimization trajectories. Missing trailing iterations are
+        represented by ``NaN``.
+    bond_length : float
+        Numerical value associated with the selected geometry.
+
+    Raises
+    ------
+    FileNotFoundError
+        If no NPZ result files are found.
+    ValueError
+        If the selected geometry is inconsistent across optimization runs.
+    """
+    histories, bond_lengths = [], []
+
+    for folder in seed_folders(root)[0]:
+        files, values = get_statenpz_paths_and_values(folder)
+
+        if len(files) == 0:
+            raise FileNotFoundError(f"No npz files found in {folder}")
+
+        histories.append(
+            np.asarray(
+                np.load(str(files[index]))["array1"],
+                dtype=float,
+            ).ravel()
+        )
+        bond_lengths.append(values[index])
+
+    if not np.allclose(bond_lengths, bond_lengths[0]):
+        raise ValueError(
+            f"Different bond lengths were selected in {root}: "
+            f"{set(bond_lengths)}"
+        )
+
+    arr = np.full(
+        (len(histories), max(len(h) for h in histories)),
+        np.nan,
+    )
+
+    for j, h in enumerate(histories):
+        arr[j, :len(h)] = h
+
+    return arr, bond_lengths[0]
+
+def qubit_hamiltonian(fcidump_path):
+    """
+    Construct a qubit Hamiltonian from an FCIDUMP-derived RHF file.
+
+    The molecular Hamiltonian is transformed using the Jordan-Wigner
+    transformation and decomposed into Pauli operators.
+
+    Parameters
+    ----------
+    fcidump_path : str or pathlib.Path
+        Path to the RHF file used to construct the molecular Hamiltonian.
+
+    Returns
+    -------
+    coeffs : numpy.ndarray
+        Real-valued coefficients of the Pauli decomposition. The first
+        coefficient corresponds to the identity operator.
+    ops
+        Pauli operators corresponding to ``coeffs``.
+    jw_h
+        Jordan-Wigner-transformed qubit Hamiltonian.
+
+    Raises
+    ------
+    ValueError
+        If any Pauli coefficient has a non-negligible imaginary part.
+
+    Notes
+    -----
+    ``read_general`` may return complex-valued coefficients even when
+    their imaginary parts are numerically zero. Such imaginary parts are
+    discarded after verification with an absolute tolerance of ``1e-12``.
+    """
+    from openfermion.transforms import jordan_wigner
+    from qchem_util import get_molecular_hamiltonian_from_fcidump
+    from pitbe import read_general
+
+    jw_h = jordan_wigner(
+        get_molecular_hamiltonian_from_fcidump(str(fcidump_path))
+    )
+    coeffs, ops = read_general(str(jw_h))
+
+    coeffs = np.asarray(coeffs, dtype=complex)
+
+    if not np.allclose(coeffs.imag, 0.0, atol=1e-12):
+        raise ValueError(
+            "Hamiltonian contains non-negligible imaginary coefficients."
+        )
+
+    return coeffs.real, ops, jw_h
+
+def read_value(txt_file, key):
+    """
+    Read a numerical value associated with a key from a TXT file.
+
+    The file is expected to contain entries of the form
+    ``<key>: <value>``.
+
+    Parameters
+    ----------
+    txt_file : str or pathlib.Path
+        Path to the TXT file.
+    key : str
+        Key identifying the value to read.
+
+    Returns
+    -------
+    float
+        Numerical value associated with ``key``.
+
+    Raises
+    ------
+    KeyError
+        If ``key`` is not found in the file.
+    """
+    with open(txt_file, "r") as f:
+        for line in f:
+            if line.startswith(key + ":"):
+                return float(line.split(":")[1].strip())
+
+    raise KeyError(f"'{key}' not found in {txt_file}")
+
+def seed_folders(root):
+    """
+    Locate directories corresponding to repeated optimization runs.
+
+    Numerically named subdirectories under ``root`` are interpreted as
+    random-seed directories. If no such directories are found, ``root``
+    itself is treated as a single optimization run.
+
+    Parameters
+    ----------
+    root : str or pathlib.Path
+        Root directory containing optimization results.
+
+    Returns
+    -------
+    folders : list
+        Directories containing individual optimization runs.
+    seeds : list
+        Numeric seed values corresponding to ``folders``. If no seed
+        directories are present, ``[None]`` is returned.
+    """
+    folders, seeds = get_folder_paths_and_values(root)
+
+    if len(folders) == 0:
+        return [root], [None]
+
+    return folders, seeds

@@ -1,31 +1,31 @@
 """
-This module provides an implemantation ansatz proposed by Gard et al. 
-on Qulacs quantum circuits.
+Implementation of the symmetry-preserving ansatz proposed by Gard et al.
 
-Functions included:
-- add_ansatz_unit: Add a two-qubit ansatz unit acting on neighboring qubits.
-- add_ansatz_layer: Add one ansatz layer composed of multiple ansatz units.
-- add_ansatz: Construct the complete ansatz circuit.
+This module provides functions for constructing the particle-number-
+preserving variational quantum circuit used in the VQE and VEBE
+calculations in this repository. The circuit is implemented using Qulacs.
 
-Use cases:
-- Preparing variational quantum states for VQE.
-- Preparing variational quantum states for VEBE.
+Functions
+---------
+add_ansatz_unit
+    Add a two-qubit ansatz unit acting on neighboring qubits.
 
+add_ansatz_layer
+    Add one layer of nearest-neighbor ansatz units.
 
-Requirements:
-- Python 3.7+
-- numpy
-- qulacs
+add_ansatz
+    Prepare the initial occupation state and append the complete ansatz
+    circuit.
 
-Note:
-- This module only constructs ansatz circuits.
-  Optimization procedures and cost-function evaluations are implemented
-  separately.
+Notes
+-----
+The ansatz acts on the main register. When it is used as part of a VEBE
+circuit, ``n_ancilla`` specifies the offset of the main register.
 
-Reference:
-Gard et al.,
-“Efficient symmetry-preserving state preparation circuits for the
-variational quantum eigensolver algorithm”,
+References
+----------
+Gard, B. T. et al., "Efficient symmetry-preserving state preparation
+circuits for the variational quantum eigensolver algorithm,"
 npj Quantum Information 6, 10 (2020).
 """
 
@@ -40,9 +40,27 @@ def add_ansatz_unit(
     phi: float,
     theta: float,
 ) -> None:
-    """Add one two-qubit entangling ansatz unit.
+    """
+    Add one two-qubit symmetry-preserving ansatz unit.
 
-    This unit acts on neighboring qubits `qubit` and `qubit + 1`.
+    The unit acts on neighboring qubits ``qubit`` and ``qubit + 1`` and
+    consists of CNOT and single-qubit rotation gates.
+
+    Parameters
+    ----------
+    circuit : QuantumCircuit
+        Qulacs quantum circuit to which the ansatz unit is appended.
+    qubit : int
+        Index of the first qubit of the neighboring pair.
+    phi : float
+        Variational rotation parameter.
+    theta : float
+        Variational rotation parameter.
+
+    Returns
+    -------
+    None
+        The supplied circuit is modified in place.
     """
     q0 = qubit
     q1 = qubit + 1
@@ -63,7 +81,33 @@ def add_ansatz_layer(
     offset: int,
     n_ancilla: int = 0,
 ) -> None:
-    """Add one layer of nearest-neighbor ansatz units."""
+    """
+    Add one layer of nearest-neighbor ansatz units.
+
+    The layer first applies ansatz units to even neighboring pairs and
+    then to odd neighboring pairs, resulting in ``n_orbitals - 1``
+    two-qubit units per layer.
+
+    Parameters
+    ----------
+    circuit : QuantumCircuit
+        Qulacs quantum circuit to which the layer is appended.
+    n_orbitals : int
+        Number of qubits in the main register.
+    theta_list : array_like
+        Sequence of theta parameters.
+    phi_list : array_like
+        Sequence of phi parameters.
+    offset : int
+        Starting index in ``theta_list`` and ``phi_list`` for this layer.
+    n_ancilla : int, optional
+        Number of ancilla qubits preceding the main register.
+
+    Returns
+    -------
+    None
+        The supplied circuit is modified in place.
+    """
     half = n_orbitals // 2
 
     for i in range(half):
@@ -90,26 +134,41 @@ def add_ansatz(
     n_electrons: int,
     n_ancilla: int = 0,
 ) -> QuantumCircuit:
-    """Construct the Jastrow-type ansatz circuit.
+    """
+    Construct the symmetry-preserving ansatz proposed by Gard et al.
+
+    The function first prepares the initial occupation state by applying
+    X gates to the first ``n_electrons`` qubits of the main register.
+    It then appends layers of nearest-neighbor ansatz units.
 
     Parameters
     ----------
-    circuit:
-        Qulacs quantum circuit to which gates are added.
-    theta_list, phi_list:
-        Variational parameters.
-    n_orbitals:
-        Number of spin orbitals / qubits used by this ansatz block.
-    n_electrons:
-        Number of initially occupied orbitals.
-    n_ancilla:
-        Number of ancilla qubits for the Block-Encoding algorithm.
-        If not using the Block-Encoding method, please ignore or input 0.
+    circuit : QuantumCircuit
+        Qulacs quantum circuit to which the ansatz is appended.
+    theta_list : array_like
+        Sequence of theta variational parameters.
+    phi_list : array_like
+        Sequence of phi variational parameters.
+    n_orbitals : int
+        Number of spin orbitals represented by the main register.
+    n_electrons : int
+        Number of initially occupied spin orbitals.
+    n_ancilla : int, optional
+        Number of ancilla qubits preceding the main register. The default
+        is 0.
 
     Returns
     -------
     QuantumCircuit
-        The input circuit with the ansatz appended.
+        The input circuit with the initial occupation state and ansatz
+        layers appended.
+
+    Raises
+    ------
+    ValueError
+        If ``n_electrons`` exceeds ``n_orbitals``, if fewer than two
+        orbitals are specified, or if insufficient variational parameters
+        are supplied.
     """
     if n_electrons > n_orbitals:
         raise ValueError("n_electrons must be <= n_orbitals.")

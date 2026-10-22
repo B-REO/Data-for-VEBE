@@ -1,14 +1,35 @@
-cff-version: 1.1.0
-
-message: "If you use this software, please cite it as below."
-
+cff-version: 1.2.0
+message: "If you use this software or data, please cite both the article and this repository."
+title: "Data for VEBE"
+type: dataset
+version: "2.0.0"
+date-released: 2026-10-20
+doi: 10.5281/zenodo.18334138
+repository-code: "https://github.com/B-REO/Data-for-VEBE"
+license:
+  - MIT
+  - CC-BY-4.0
 authors:
-- family-names: Baba
-  given-names: Reo
-  orcid: https://orcid.org/0009-0006-4020-099X
-
-title: "B-REO/Data-for-VEBE"
-
-version: "1.1.0"
-
-date-released: 2026-06-30
+  - family-names: Baba
+    given-names: Reo
+    orcid: "https://orcid.org/0009-0006-4020-099X"
+    affiliation: "Department of Chemistry, Graduate School of Science, Kyoto University"
+  - family-names: Cainelli
+    given-names: Mauro
+    affiliation: "Department of Chemistry, Graduate School of Science, Kyoto University"
+  - family-names: Kurashige
+    given-names: Yuki
+    affiliation: "Department of Chemistry, Graduate School of Science, Kyoto University"
+preferred-citation:
+  type: article
+  title: "Development of a Variational Quantum Algorithm for Measurement Reduction via the Block-Encoding Method"
+  authors:
+    - family-names: Baba
+      given-names: Reo
+      orcid: "https://orcid.org/0009-0006-4020-099X"
+    - family-names: Cainelli
+      given-names: Mauro
+    - family-names: Kurashige
+      given-names: Yuki
+  year: 2026
+  notes: "Submitted to Physical Review A"

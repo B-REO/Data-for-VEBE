@@ -1,0 +1,12 @@
+load file: /home/users/dpw/c-vqe-be/pro_09/rhf_holder/N2_6_6_ex
+Roop times: 194
+Normalize factor: 16.53184717722211
+Hartree-Fock Energy: -108.19100345327941
+Summation of the absolution of coeffisients: -96.48762012760552
+True energy: -6.513476831441964
+True probability: 0.1552326178416069
+Molecule: N2
+The number of Pauli rotation gates: 383
+The number of mesurements: 26306304.0
+Variable Value: 6_6
+Shift value: 102.22015942185453

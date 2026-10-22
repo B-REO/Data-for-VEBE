@@ -17,7 +17,7 @@ Output:
     * array4: target value of optimization
 
   These are saved to:
-    data/npz/worked/vqe/optimization/{molecule}/{timestamp}/{seed number}/npz_{molecule}_{distance}.npz
+    data/npz/worked/vqe/fci/optimization/{molecule}/{timestamp}/{seed number}/npz_{molecule}_{distance}.npz
 
 - Log `.txt` files recording for each variable value:
     * RHF input file name
@@ -67,7 +67,7 @@ time = now.strftime("%Y_%m_%d_%H_%M")
 rhf_dir = os.path.join(os.path.dirname(__file__), "..", "data", "rhf", "H2")
 rhf_list = find_rhf_files_with_metadata_for_fci(os.path.expanduser(rhf_dir))
 # Random seeds used in the simulations.
-# Modify this range if you want to run a different seed set.
+# H2: seeds 0-99 (as in the paper). For H4, use seed_list = [100].
 seed_list = np.linspace(0, 99, 100)
 
 # === Step 2: Optimization by VQE ===
@@ -118,9 +118,10 @@ for seed_n in seed_list:
         result_dir = os.path.join(os.path.dirname(__file__), 
                                   "..", "data", 
                                   "npz", "worked", 
-                                  "vqe", "optimization", 
-                                  str(rhf_list[i][1]), time,
-                                  str(seed_n))
+                                  "vqe", "fci", 
+                                  "optimization", 
+                                  str(rhf_list[i][1]), 
+                                  time, str(seed_n))
         os.makedirs(result_dir, exist_ok=True)
         f_name = "npz_" + str(rhf_list[i][1]) + "_" + str(rhf_list[i][2]) + ".npz" 
         file_n = os.path.join(result_dir, f_name)

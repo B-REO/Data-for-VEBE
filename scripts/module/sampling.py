@@ -1,15 +1,25 @@
 """
-This module provides utilities for:
-- Parsing compact Pauli strings (e.g., 'X0X1Y2Y3') into Qulacs-compatible observables.
-- Applying appropriate basis transformations (X → H, Y → Rz(-π/2)+H) for Z-basis measurement.
-- Efficiently sampling ±1 values from quantum states with vectorized bitwise operations.
-- Estimating expectation values from sampling results and comparing them to exact theoretical values.
+Sampling utilities for Pauli measurements and VEBE success probabilities.
 
-Main entry point:
-    - `expect_sampling(term, shots, n_qubits, base_state)`:
-        Returns both theoretical and sampling-based expectation values for a given Pauli term.
+This module provides functions for parsing compact Pauli strings,
+constructing and caching measurement-basis transformation circuits,
+converting computational-basis samples to Pauli measurement outcomes,
+and performing repeated sampling for VEBE and VQE simulations.
 
-Compatible with Python 3.7+ and Qulacs 0.5.0+.
+Functions
+---------
+batched_sampling_est_prob
+    Estimate block-encoding success probabilities over repeated sampling
+    trials using batched execution.
+    
+expect_sampling
+    Estimate the expectation value of a Pauli operator from measurement
+    samples and return the corresponding exact simulator value.
+
+Notes
+-----
+Compact Pauli strings use representations such as ``"X0Y1Z2"``.
+An empty string represents the identity operator.
 """
 
 import re
@@ -22,19 +32,24 @@ _BASIS_CIRCUIT_CACHE: Dict[Tuple[Tuple[Tuple[int, str], ...], int], QuantumCircu
 
 def _basis_circuit_for_term(pauli_ops: Dict[int, str], n_qubits: int) -> QuantumCircuit:
     """
-    Constructs and caches the basis change circuit for a given Pauli term.
+    Construct and cache the basis-change circuit for a Pauli term.
 
-    For each qubit:
-        - 'X': Apply Hadamard (H)
-        - 'Y': Apply Rz(-π/2) followed by H
-        - 'Z' or 'I': No change
+    X measurements are transformed to the computational basis with a
+    Hadamard gate. Y measurements use an ``RZ(-pi/2)`` rotation followed
+    by a Hadamard gate. Z measurements require no basis transformation.
 
-    Parameters:
-        pauli_ops (Dict[int, str]): Dictionary mapping qubit indices to Pauli letters.
-        n_qubits (int): Total number of qubits in the system.
+    Parameters
+    ----------
+    pauli_ops : dict of int to str
+        Mapping from qubit indices to Pauli operators.
+    n_qubits : int
+        Total number of qubits.
 
-    Returns:
-        QuantumCircuit: Basis transformation circuit cached by (term, n_qubits).
+    Returns
+    -------
+    QuantumCircuit
+        Basis-change circuit. Circuits are cached using the Pauli term
+        and total number of qubits as the cache key.
     """
     key = (tuple(sorted(pauli_ops.items())), n_qubits)
     if key in _BASIS_CIRCUIT_CACHE:
@@ -51,16 +66,19 @@ def _basis_circuit_for_term(pauli_ops: Dict[int, str], n_qubits: int) -> Quantum
 
 def _format_qulacs_op_string(pauli_ops: dict) -> str:
     """
-    Formats a Pauli term dictionary into Qulacs Observable string syntax.
+    Convert a Pauli-operator dictionary to Qulacs observable syntax.
 
-    Example:
-        {0:'X', 2:'Y'} → "X 0 Y 2"
+    Parameters
+    ----------
+    pauli_ops : dict
+        Mapping from qubit indices to Pauli operators.
 
-    Parameters:
-        pauli_ops (dict): Mapping from qubit indices to Pauli operators.
-
-    Returns:
-        str: Qulacs-formatted operator string.
+    Returns
+    -------
+    str
+        Qulacs-formatted Pauli string. For example,
+        ``{0: "X", 2: "Y"}`` is converted to ``"X 0 Y 2"``.
+        An empty dictionary returns an empty string.
     """
     if not pauli_ops:
         return ""  
@@ -71,18 +89,19 @@ def _format_qulacs_op_string(pauli_ops: dict) -> str:
 
 def _parse_pauli_term_compact(term: str) -> Dict[int, str]:
     """
-    Parses compact Pauli strings like 'X0X1Y2' into a dictionary format.
+    Parse a compact Pauli string into a qubit-operator mapping.
 
-    Example:
-        'X0Y2' → {0:'X', 2:'Y'}
+    Parameters
+    ----------
+    term : str
+        Compact Pauli string such as ``"X0Y2"``. An empty string
+        represents the identity operator.
 
-    An empty string ('') is interpreted as the identity operator.
-
-    Parameters:
-        term (str): Compact Pauli string.
-
-    Returns:
-        Dict[int, str]: Mapping from qubit indices to Pauli letters.
+    Returns
+    -------
+    dict of int to str
+        Mapping from qubit indices to Pauli operators. For example,
+        ``"X0Y2"`` is converted to ``{0: "X", 2: "Y"}``.
     """
     ops = {}
     if not term:  
@@ -93,19 +112,27 @@ def _parse_pauli_term_compact(term: str) -> Dict[int, str]:
 
 def _samples_to_pm1(samples, support_qubits, n_qubits):
     """
-    Converts integer measurement samples to ±1 values for a given Z-term.
+    Convert computational-basis samples to Pauli outcomes of +1 or -1.
 
-    For each sample, computes the parity of selected qubits:
-        - Even parity → +1
-        - Odd parity → -1
+    The parity of the measured bits on ``support_qubits`` determines the
+    corresponding Pauli measurement outcome. Even parity gives +1 and
+    odd parity gives -1.
 
-    Parameters:
-        samples (np.ndarray): Array of measurement results (integers).
-        support_qubits (List[int]): Qubit indices involved in the Pauli term.
-        n_qubits (int): Total number of qubits in the system.
+    Parameters
+    ----------
+    samples : array_like
+        Integer representations of computational-basis measurement
+        outcomes.
+    support_qubits : sequence of int
+        Qubit indices on which the Pauli operator acts nontrivially.
+    n_qubits : int
+        Total number of qubits.
 
-    Returns:
-        np.ndarray: Array of ±1 values of shape (len(samples),).
+    Returns
+    -------
+    numpy.ndarray
+        Array of +1 and -1 measurement outcomes with one element per
+        input sample.
     """
     if samples is None:
         return np.array([], dtype=np.int8)
@@ -138,26 +165,41 @@ def _samples_to_pm1(samples, support_qubits, n_qubits):
         return p
 
     parity = np.fromiter((parity_of(v) for v in s_obj), dtype=np.uint8, count=M)
-    print("support:", support_qubits, " supp dtype:", np.asarray([int(q) for q in support_qubits]).dtype)
     return (1 - 2 * parity).astype(np.int8)
 
 def batched_sampling_est_prob(qu_state, sub, shots_per_trial, n_trials,
                               max_batch_shots=2_000_000):
     """
-    Performs repeated sampling in batches and returns estimated probabilities.
+    Estimate all-zero probabilities over repeated sampling trials.
 
-    This function divides `n_trials` into batches and collects sampling data
-    to estimate the probability of measuring all zeros on `sub` qubits.
+    Sampling is performed in batches to limit the number of shots passed
+    to Qulacs at once. For each trial, the function estimates the
+    probability that the lowest ``sub`` qubits are all measured in the
+    zero state.
 
-    Parameters:
-        qu_state (QuantumState): The quantum state to sample from.
-        sub (int): Number of qubits to check for |0⟩ in sampling.
-        shots_per_trial (int): Number of shots per sampling trial.
-        n_trials (int): Total number of trials to perform.
-        max_batch_shots (int): Upper bound on total shots per batch.
+    Parameters
+    ----------
+    qu_state
+        Qulacs quantum state to sample.
+    sub : int
+        Number of lowest-index qubits required to be in the zero state.
+    shots_per_trial : int
+        Number of measurement shots in each trial.
+    n_trials : int
+        Number of independent sampling trials.
+    max_batch_shots : int, optional
+        Approximate maximum number of shots sampled in one batch. The
+        default is 2,000,000.
 
-    Returns:
-        np.ndarray: Estimated probabilities (length = `n_trials`) of all-zero outcomes.
+    Returns
+    -------
+    numpy.ndarray
+        Estimated all-zero probabilities for the individual trials.
+        The returned array has length ``n_trials``.
+
+    Notes
+    -----
+    If ``sub <= 0``, the probability is defined as one for every trial.
     """
     shots_per_trial = int(shots_per_trial)
     n_trials = int(n_trials)
@@ -186,21 +228,42 @@ def batched_sampling_est_prob(qu_state, sub, shots_per_trial, n_trials,
 
 def expect_sampling(term, shots, n_qubits, base_state):
     """
-    Performs basis transformation and estimates expectation value by sampling.
+    Estimate the expectation value of a Pauli term by sampling.
 
-    Parameters:
-        term (str): Pauli term in compact form (e.g., 'X0Y1').
-        shots (int): Number of measurement samples to draw.
-        n_qubits (int): Total number of qubits.
-        base_state (QuantumState): The input quantum state to measure.
+    The required basis transformation is applied to a copy of
+    ``base_state`` before computational-basis sampling. The function also
+    evaluates the exact expectation value using a Qulacs ``Observable``.
 
-    Returns:
-        Tuple[float, float, float, float]:
-            (samp_pro, samp_exp, theo_pro, theo_expect)
-        - samp_pro   : Sampling-based probability of +1 outcome
-        - samp_exp   : Sampling-based expectation value (2*p - 1)
-        - theo_pro   : Theoretical probability of +1 outcome
-        - theo_expect: Theoretical expectation value using Observable
+    Parameters
+    ----------
+    term : str
+        Pauli term in compact notation, such as ``"X0Y1"``. An empty
+        string represents the identity operator.
+    shots : int
+        Number of measurement shots.
+    n_qubits : int
+        Total number of qubits.
+    base_state
+        Qulacs quantum state to be measured. The supplied state is not
+        modified.
+
+    Returns
+    -------
+    samp_pro : float
+        Sampling-based probability of obtaining the +1 eigenvalue.
+    samp_exp : float
+        Sampling-based expectation value.
+    theo_pro : float
+        Exact probability of the +1 eigenvalue calculated from the
+        simulator expectation value.
+    theo_expect : float
+        Exact expectation value calculated using a Qulacs ``Observable``.
+
+    Notes
+    -----
+    If ``shots <= 0``, the exact simulator expectation value is returned
+    in place of a sampled estimate. This is used for terms, such as the
+    identity operator, that do not require sampling.
     """
     shots = int(shots)
     pauli_ops = _parse_pauli_term_compact(term)

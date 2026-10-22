@@ -1,0 +1,10 @@
+load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H4_ver7
+Roop times: 194
+Normalize factor: 14.525635908550415
+True energy: -7.742417924899964
+True probability: 0.28410763967524266
+Molecule: H4
+The number of Pauli rotation gates: 185
+The number of mesurements: 20239645.0
+Variable Value: 0.55
+Shift value: -5.908757988817451

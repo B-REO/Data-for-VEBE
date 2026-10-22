@@ -1,27 +1,34 @@
 """
-This module provides objective functions for variational quantum
-algorithms based on the ansatz proposed by Gard et al. 
-[https://www.nature.com/articles/s41534-019-0240-1.pdf] 
-and Qulacs quantum circuits.
+Cost functions for VEBE and VQE variational optimizations.
 
-Functions included:
-- cost_vebe: Cost function used in VEBE optimization.
-- cost_vqe: Cost function used in VEBE optimization.
+This module provides objective functions for ground-state optimization
+using the symmetry-preserving ansatz proposed by Gard et al. The quantum
+circuits are implemented with Qulacs.
 
-Use cases:
-- Ground-state energy calculations using VQE.
-- Ground-state energy calculations using VEBE.
-- Benchmark comparisons between VQE and VEBE.
+Functions
+---------
+cost_vebe
+    Evaluate the VEBE objective from the block-encoding success
+    probability.
 
+cost_vqe
+    Evaluate the VQE objective as the expectation value of the
+    Hamiltonian.
 
-Requirements:
-- Python 3.7+
-- numpy
-- qulacs
+Notes
+-----
+This module evaluates objective functions only. Classical optimization
+procedures such as BFGS, COBYLA, or SLSQP are implemented separately in
+the execution scripts.
 
-Note:
-- This module only evaluates objective functions.
-- Optimization procedures (e.g., BFGS, COBYLA, SLSQP) should be implemented separately in the execution scripts.
+The VEBE implementation requires the PItBE package included under
+``vendor/PItBE``.
+
+References
+----------
+Gard, B. T. et al., "Efficient symmetry-preserving state preparation
+circuits for the variational quantum eigensolver algorithm,"
+npj Quantum Information 6, 10 (2020).
 """
 
 import math
@@ -50,51 +57,61 @@ def cost_vebe(
     control_states: list,
     operator_list: list,
 ) -> float:
-    """Evaluate the VEBE cost function.
+    """
+    Evaluate the VEBE objective function.
+
+    The variational ansatz is applied to the main register, followed by
+    the block-encoding circuit. The objective is obtained from the
+    probability of measuring all ancilla qubits in the zero state.
 
     Parameters
     ----------
     variable : list
-        Variational parameters to be optimized. The first half is used as
-        phi parameters, and the second half is used as theta parameters.
+        Variational parameters. The first ``comb(n_main, n_electrons)``
+        elements are used as theta parameters and the remaining elements
+        as phi parameters.
     n_main : int
-        Number of main qubits used to represent the quantum state.
+        Number of qubits in the main register.
     n_ancilla : int
-        Number of ancilla qubits used for the block-encoding circuit.
+        Number of ancilla qubits used for block encoding.
     n_electrons : int
-        Number of initially occupied orbitals.
+        Number of initially occupied spin orbitals.
     normalization_factor : float
         Normalization factor of the block-encoded Hamiltonian.
-    gate_b : QuantumGate
-        Quantum gate that prepares the amplitudes corresponding to the
-        absolute values of the normalized coefficients on the ancilla qubits.
-    sign_gate : QuantumGate
-        Quantum gate that encodes the signs of the normalized coefficients.
+    gate_b
+        Gate preparing the ancilla amplitudes associated with the
+        absolute values of the normalized Hamiltonian coefficients.
+    sign_gate
+        Gate encoding the signs of the normalized Hamiltonian
+        coefficients.
     control_states : list
-        List of control states used to apply each Pauli operator conditionally.
+        Control states associated with the conditionally applied Pauli
+        operators.
     operator_list : list
-        List of Pauli operators applied in the block-encoding circuit.
+        Pauli operators used to construct the block-encoded Hamiltonian.
 
     Returns
     -------
     float
-        Objective value for VEBE optimization, given by
-        -normalization_factor * sqrt(p_succ).
+        VEBE objective value,
+        ``-abs(normalization_factor) * sqrt(p_succ)``, where ``p_succ``
+        is the probability of measuring all ancilla qubits in the zero
+        state.
     """
     # Prepare the initial quantum state and quantum circuit.
     state = QuantumState(n_main + n_ancilla)
     circuit = QuantumCircuit(n_main + n_ancilla)
 
-    # Split the optimization variables into phi and theta parameters.
+    # Split the optimization variables into theta and phi parameters.
     n_ansatz_params = math.comb(n_main, n_electrons)
-    phi_list = variable[:n_ansatz_params]
-    theta_list = variable[n_ansatz_params:]
+    theta_list = variable[:n_ansatz_params]
+    phi_list = variable[n_ansatz_params:]
 
     # Add the ansatz circuit to the main register.
     add_ansatz(
         circuit,
-        phi_list,
         theta_list,
+        phi_list,
         n_main,
         n_electrons,
         n_ancilla,
@@ -125,50 +142,56 @@ def cost_vebe(
     return -np.sqrt(abs(success_probability)) * abs(normalization_factor)
 
 def cost_vqe(
-    variable: list, 
-    n_main: int, 
+    variable: list,
+    n_main: int,
     n_electrons: int,
     hamiltonian
 ) -> float:
-    """Evaluate the VQE cost function.
+    """
+    Evaluate the VQE objective function.
+
+    The function prepares the variational state using the
+    symmetry-preserving ansatz and returns the expectation value of the
+    supplied Hamiltonian.
+
     Parameters
     ----------
     variable : list
-        Variational parameters to be optimized. The first half is used as
-        phi parameters, and the second half is used as theta parameters.
+        Variational parameters. The first ``comb(n_main, n_electrons)``
+        elements are used as theta parameters and the remaining elements
+        as phi parameters.
     n_main : int
-        Number of main qubits used to represent the quantum state.
+        Number of qubits in the main register.
     n_electrons : int
-        Number of initially occupied orbitals.
-    hamiltonian : 
-        Hamiltonian for which the expectation value is evaluated.
-        Qulacs Observable used to evaluate the expectation value.
+        Number of initially occupied spin orbitals.
+    hamiltonian
+        Qulacs observable representing the Hamiltonian.
 
     Returns
     -------
     float
-        Objective value for VQE optimization.
+        Expectation value of the Hamiltonian for the variational state.
     """
     # Prepare the initial quantum state and quantum circuit.
-    state = QuantumState(n_main) 
+    state = QuantumState(n_main)
     circuit = QuantumCircuit(n_main)
 
-    # Split the optimization variables into phi and theta parameters.
+    # Split the optimization variables into theta and phi parameters.
     n_ansatz_params = math.comb(n_main, n_electrons)
-    phi_lst = variable[:n_ansatz_params]
-    theta_lst = variable[n_ansatz_params:]
+    theta_lst = variable[:n_ansatz_params]
+    phi_lst = variable[n_ansatz_params:]
 
     # Add the ansatz circuit to the main register.
     add_ansatz(
         circuit,
-        phi_lst, 
-        theta_lst, 
-        n_main, 
-        n_electrons
-        )
+        theta_lst,
+        phi_lst,
+        n_main,
+        n_electrons,
+    )
 
-    # Apply the ansatz circuit to the quantum state
-    circuit.update_quantum_state(state) 
+    # Apply the ansatz circuit to the quantum state.
+    circuit.update_quantum_state(state)
 
     # Return the expectation value as the objective value.
     return hamiltonian.get_expectation_value(state)

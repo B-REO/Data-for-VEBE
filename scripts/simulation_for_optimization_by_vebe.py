@@ -17,7 +17,7 @@ Output:
     * array4: target value of optimization
 
   These are saved to:
-    data/npz/worked/vebe/optimization/{molecule}/{timestamp}/{seed number}/npz_{molecule}_{distance}.npz
+    data/npz/worked/vebe/fci/optimization/{molecule}/{timestamp}/{seed number}/npz_{molecule}_{distance}.npz
 
 - Log `.txt` files recording for each variable value:
     * RHF input file name
@@ -70,7 +70,7 @@ time = now.strftime("%Y_%m_%d_%H_%M")
 rhf_dir = os.path.join(os.path.dirname(__file__), "..", "data", "rhf", "H2")
 rhf_list = find_rhf_files_with_metadata_for_fci(os.path.expanduser(rhf_dir))
 # Random seeds used in the simulations.
-# Modify this range if you want to run a different seed set.
+# H2: seeds 0-99 (as in the paper). For H4, use seed_list = [100].
 seed_list = np.linspace(0, 99, 100)
 
 # === Step 2: Optimization by VEBE ===
@@ -100,17 +100,17 @@ for seed_n in seed_list:
         corrector = (eig_min + eig_max)/2 
         re_num[0] -= corrector 
 
-        # eq.(24)
+        # eq.(38)
         s_dush = np.sum(np.abs(re_num)) 
 
-        # eq.(25)
+        # eq.(39)
         total_shots = np.ceil(s_dush**2/1.6/1.6*10**6/4) 
 
-        # eq.(27)
+        # eq.(41)
         delta = total_shots**0.5*(1.6)/10**5/(s_dush - np.abs(eig_min/2 - eig_max/2))*np.sqrt(s_dush**2 - np.abs(eig_min/2 - eig_max/2)**2) 
     
         re_num[0] -= np.abs(delta)
-        # eq.(26)
+        # eq.(40)
         corrector += np.abs(delta)
 
         jw_norm = np.sum(np.abs(re_num))
@@ -173,9 +173,10 @@ for seed_n in seed_list:
         result_dir = os.path.join(os.path.dirname(__file__), 
                                   "..", "data", 
                                   "npz", "worked", 
-                                  "vebe", "optimization", 
-                                  str(rhf_list[i][1]), time,
-                                  str(seed_n))
+                                  "vebe", "fci",
+                                  "optimization", 
+                                  str(rhf_list[i][1]), 
+                                  time, str(seed_n))
         os.makedirs(result_dir, exist_ok=True)
         f_name = "npz_" + str(rhf_list[i][1]) + "_" + str(rhf_list[i][2]) + ".npz" 
         file_n = os.path.join(result_dir, f_name)

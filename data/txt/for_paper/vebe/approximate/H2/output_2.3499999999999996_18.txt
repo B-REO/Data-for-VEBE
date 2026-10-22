@@ -1,0 +1,10 @@
+load file: /home/users/dpw/c-vqe-be/pro_11/rhf_holder/H2_ver7
+Roop times: 194
+Normalize factor: 1.4858843478945494
+True energy: -0.8386022590983763
+True probability: 0.3185239114302283
+Molecule: H2
+The number of Pauli rotation gates: 15
+The number of mesurements: 212296.0
+Variable Value: 2.3499999999999996
+Shift value: 0.09941860563940952
